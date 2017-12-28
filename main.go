@@ -1,14 +1,18 @@
-package main
+package plexdibella
 
 import (
-	"fmt"
 	"github.com/davecgh/go-spew/spew"
 	"github.com/notbaab/go-plex-client"
 	"log"
 	"strings"
 )
 
-func GetCleanNamesMovies(plexInstance *plex.Plex, sectionDirectory plex.Directory) {
+type RenameMap struct {
+	src  string
+	dest string
+}
+
+func GetCleanNamesMovies(plexInstance *plex.Plex, sectionDirectory plex.Directory) []RenameMap {
 	// first get the section meta data
 	section, pErr := plexInstance.GetSection(sectionDirectory.Key)
 	spew.Dump(section)
@@ -17,6 +21,7 @@ func GetCleanNamesMovies(plexInstance *plex.Plex, sectionDirectory plex.Director
 		log.Println(pErr)
 		log.Println(section)
 	}
+	renamedMap := []RenameMap{}
 
 	// Walk over metadata container
 	for _, metadata := range section.MediaContainer.Metadata {
@@ -38,28 +43,10 @@ func GetCleanNamesMovies(plexInstance *plex.Plex, sectionDirectory plex.Director
 
 				// got the matching library location
 				fullFileName := libraryLocation + "/" + newFileName
-				fmt.Printf("Changing file %s to %s\n", part.File, fullFileName)
+				renamedMap = append(renamedMap, RenameMap{part.File, fullFileName})
 			}
 		}
 	}
-}
 
-func main() {
-	Plex, err := plex.New("url", "Magic Token")
-	fmt.Println(Plex.URL)
-	id, err := Plex.GetMachineID()
-
-	if err != nil {
-		log.Println(err)
-	}
-
-	fmt.Println(id)
-	sections, err := Plex.GetLibraries()
-	spew.Dump(sections)
-
-	for _, section := range sections.MediaContainer.Directory {
-		if section.Type == "movie" {
-			GetCleanNamesMovies(Plex, section)
-		}
-	}
+	return renamedMap
 }
