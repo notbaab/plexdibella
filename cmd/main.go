@@ -2,29 +2,61 @@ package main
 
 import (
 	"fmt"
-	"github.com/davecgh/go-spew/spew"
-	"github.com/notbaab/go-plex-client"
+	"github.com/jrudio/go-plex-client"
 	"github.com/notbaab/plexdibella"
+	"github.com/urfave/cli"
 	"log"
+	"os"
 )
 
-func main() {
-	Plex, err := plex.New("url", "token")
-	fmt.Println(Plex.URL)
-	id, err := Plex.GetMachineID()
+var (
+	url   string
+	token string
+)
 
+func test(c *cli.Context) {
+	// plexdibella.GetCleanNames
+	p, err := plex.New(url, token)
 	if err != nil {
-		log.Println(err)
+		log.Panicln(err)
 	}
 
-	fmt.Println(id)
-	sections, err := Plex.GetLibraries()
-	spew.Dump(sections)
+	renameMap, err := plexdibella.GetAllCleanNames(p)
+	if err != nil {
+		log.Panicln(err)
+	}
 
-	for _, section := range sections.MediaContainer.Directory {
-		if section.Type == "movie" {
-			renameMap := plexdibella.GetCleanNamesMovies(Plex, section)
-			fmt.Printf("%+v\n", renameMap)
+	fmt.Printf("%d files to rename\n", len(renameMap))
+	for _, nameMap := range renameMap {
+		if false {
+			fmt.Printf("%s -> %s\n", nameMap.Src, nameMap.Dest)
 		}
 	}
+}
+
+func main() {
+	app := cli.NewApp()
+
+	app.Name = "plexdibella"
+
+	app.Flags = []cli.Flag{
+		cli.StringFlag{
+			Name:        "url, u",
+			Usage:       "Plex url or ip",
+			Destination: &url,
+		},
+		cli.StringFlag{
+			Name:        "token, tkn",
+			Usage:       "abc123",
+			Destination: &token,
+		},
+	}
+	app.Commands = []cli.Command{
+		{
+			Name:   "test",
+			Usage:  "Test your connection to your Plex Media Server",
+			Action: test,
+		},
+	}
+	app.Run(os.Args)
 }

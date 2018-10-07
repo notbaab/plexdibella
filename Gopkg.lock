@@ -15,13 +15,19 @@
 
 [[projects]]
   branch = "master"
-  name = "github.com/jrudio/go-plex-client"
+  name = "github.com/notbaab/go-plex-client"
   packages = ["."]
-  revision = "89c7e1cda9c9cf66324b2639b6c7f9611ef0e9da"
+  revision = "547d043f7d75f30d04e6e7d6d42630e7d1201c08"
+
+[[projects]]
+  name = "github.com/urfave/cli"
+  packages = ["."]
+  revision = "cfb38830724cc34fedffe9a2a29fb54fa9169cd1"
+  version = "v1.20.0"
 
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "078ec8d0338a7b817e117e4b6a31c10d595b310c76be3df8243104a8caf21232"
+  inputs-digest = "f926eb9a396296d449567ce749bb2f2aee239578db59b15c815114141e805242"
   solver-name = "gps-cdcl"
   solver-version = 1

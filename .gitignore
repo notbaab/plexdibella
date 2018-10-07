@@ -1,3 +1,9 @@
 vendor/
 
 cmd/cmd
+
+cmd/creds\.txt
+
+\.vscode/
+
+\.DS_Store
