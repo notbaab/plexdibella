@@ -103,17 +103,16 @@ func cleanEpisodeName(prefixPath, title string, episode plex.Metadata) string {
 	return fmt.Sprintf("%s/%s/Season %d/S%dE%d %s.%s", prefixPath, title, episode.ParentIndex, episode.ParentIndex, episode.Index, episode.Title, episode.Media[0].Part[0].Container)
 }
 
-func GetCleanNamesTv(p *plex.Plex, sectionDirectory plex.Directory) ([]RenameMap, error) {
-	renamedMap := []RenameMap{}
-	section, pErr := p.GetLibraryContent(sectionDirectory.Key, "")
+func CrawlToEpisode(p *plex.Plex, libraryKey string, episodeChan chan plex.Metadata) {
+	defer close(episodeChan)
+
+	section, pErr := p.GetLibraryContent(libraryKey, "")
 	if pErr != nil {
 		log.Println(pErr)
-		return renamedMap, pErr
+		return
 	}
 
-	tvPaths := getLibraryLocations(sectionDirectory)
 	topLevelTVLibraries := section.MediaContainer.Metadata
-
 	for _, tvShow := range topLevelTVLibraries {
 		seasons, pErr := p.GetMetadataChildren(tvShow.RatingKey)
 		if pErr != nil {
@@ -128,40 +127,48 @@ func GetCleanNamesTv(p *plex.Plex, sectionDirectory plex.Directory) ([]RenameMap
 			}
 
 			for _, episode := range episodesSection.MediaContainer.Metadata {
-				if len(episode.Media) > 1 {
-					log.Printf("%s S%d %s has multiple media, picking the first", tvShow.Title, episode.ParentIndex, episode.Title)
-				}
-				part, err := getFirstMediaPart(episode)
-				file := part.File
-
-				libraryPrefix, err := matchPrefix(tvPaths, file)
-
-				if err != nil {
-					log.Panicln(err)
-					continue
-				}
-
-				cleanName := cleanEpisodeName(libraryPrefix, tvShow.Title, episode)
-				if cleanName == file {
-					continue
-				}
-				renamedMap = append(renamedMap, RenameMap{Src: file, Dest: cleanName})
+				episodeChan <- episode // send sum to c
 			}
 		}
+	}
+}
+
+func GetCleanNamesTv(p *plex.Plex, sectionDirectory plex.Directory) ([]RenameMap, error) {
+	renamedMap := []RenameMap{}
+	episodeChan := make(chan plex.Metadata, 100)
+	tvPaths := getLibraryLocations(sectionDirectory)
+
+	go CrawlToEpisode(p, sectionDirectory.Key, episodeChan)
+	for episode := range episodeChan {
+		title := episode.GrandparentTitle
+		part, err := getFirstMediaPart(episode)
+		file := part.File
+
+		libraryPrefix, err := matchPrefix(tvPaths, file)
+
+		if err != nil {
+			log.Println(err)
+			continue
+		}
+
+		cleanName := cleanEpisodeName(libraryPrefix, title, episode)
+		if cleanName == file {
+			continue
+		}
+		renamedMap = append(renamedMap, RenameMap{Src: file, Dest: cleanName})
 	}
 
 	return renamedMap, nil
 }
 
-func GetCleanNamesMovies(p *plex.Plex, sectionDirectory plex.Directory) ([]RenameMap, error) {
-	renamedMap := []RenameMap{}
-	section, pErr := p.GetLibraryContent(sectionDirectory.Key, "")
+func CrawlMovies(p *plex.Plex, libraryKey string, movieChan chan plex.Metadata) {
+	defer close(movieChan)
+
+	section, pErr := p.GetLibraryContent(libraryKey, "")
 	if pErr != nil {
 		log.Println(pErr)
-		return renamedMap, pErr
+		return
 	}
-
-	moviePaths := getLibraryLocations(sectionDirectory)
 
 	for _, movie := range section.MediaContainer.Metadata {
 		metadata, pErr := p.GetMetadata(movie.RatingKey)
@@ -170,29 +177,29 @@ func GetCleanNamesMovies(p *plex.Plex, sectionDirectory plex.Directory) ([]Renam
 			continue
 		}
 
-		metaDataSection := metadata.MediaContainer.Metadata[0]
-		if len(metaDataSection.Media) > 1 {
-			log.Printf("More than one media section for %s, picking the first", movie.Title)
-		}
+		movieChan <- metadata.MediaContainer.Metadata[0]
+	}
+}
 
-		part, err := getFirstMediaPart(metaDataSection)
+func GetCleanNamesMovies(p *plex.Plex, sectionDirectory plex.Directory) ([]RenameMap, error) {
+	renamedMap := []RenameMap{}
+	movieChan := make(chan plex.Metadata, 100)
+	moviePaths := getLibraryLocations(sectionDirectory)
+
+	go CrawlMovies(p, sectionDirectory.Key, movieChan)
+	for movie := range movieChan {
+		part, err := getFirstMediaPart(movie)
 		file := part.File
-		if err != nil {
-			log.Println(pErr)
-			continue
-		}
-
 		libraryPrefix, err := matchPrefix(moviePaths, file)
 
 		if err != nil {
-			log.Panicln(err)
+			log.Println(err)
 			continue
 		}
 
 		cleanName := fmt.Sprintf("%s/%s.%s", libraryPrefix, movie.Title, part.Container)
-		// already clean
 		if cleanName == file {
-			continue
+			continue // already clean
 		}
 		renamedMap = append(renamedMap, RenameMap{Src: file, Dest: cleanName})
 	}
