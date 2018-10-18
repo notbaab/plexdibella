@@ -127,7 +127,7 @@ func CrawlToEpisode(p *plex.Plex, libraryKey string, episodeChan chan plex.Metad
 			}
 
 			for _, episode := range episodesSection.MediaContainer.Metadata {
-				episodeChan <- episode // send sum to c
+				episodeChan <- episode
 			}
 		}
 	}
@@ -164,6 +164,7 @@ func GetCleanNamesTv(p *plex.Plex, sectionDirectory plex.Directory) ([]RenameMap
 func CrawlMovies(p *plex.Plex, libraryKey string, movieChan chan plex.Metadata) {
 	defer close(movieChan)
 
+	// TODO: Get library content has all the metadata we want, use it plus a filter
 	section, pErr := p.GetLibraryContent(libraryKey, "")
 	if pErr != nil {
 		log.Println(pErr)
@@ -171,13 +172,7 @@ func CrawlMovies(p *plex.Plex, libraryKey string, movieChan chan plex.Metadata) 
 	}
 
 	for _, movie := range section.MediaContainer.Metadata {
-		metadata, pErr := p.GetMetadata(movie.RatingKey)
-		if pErr != nil {
-			log.Println(pErr)
-			continue
-		}
-
-		movieChan <- metadata.MediaContainer.Metadata[0]
+		movieChan <- movie
 	}
 }
 
