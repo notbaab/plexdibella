@@ -1,9 +1,8 @@
 package plexdibella
 
 import (
-	"fmt"
-	// "github.com/davecgh/go-spew/spew"
 	"errors"
+	"fmt"
 	"github.com/jrudio/go-plex-client"
 	"log"
 	"os"
@@ -15,6 +14,8 @@ type RenameMap struct {
 	Src  string
 	Dest string
 }
+
+type streamFunc func(*plex.Plex, plex.Directory, chan RenameMap)
 
 func RenameMediaLibraryFiles(p *plex.Plex) error {
 	renameMap, err := GetAllCleanNames(p)
@@ -33,6 +34,32 @@ func RenameMediaLibraryFiles(p *plex.Plex) error {
 		err = os.Rename(renamePair.Src, renamePair.Dest)
 		if err != nil {
 			log.Println(err)
+		}
+	}
+
+	return nil
+}
+
+func streamCleanNames(p *plex.Plex, renameMapChan chan RenameMap, section plex.Directory, cleanFunc streamFunc) {
+	subRenameMapChan := make(chan RenameMap, 100)
+	go cleanFunc(p, section, subRenameMapChan)
+	for renameMap := range subRenameMapChan {
+		renameMapChan <- renameMap
+	}
+}
+
+func StreamAllCleanNames(p *plex.Plex, renameMapChan chan RenameMap) error {
+	sections, err := p.GetLibraries()
+	defer close(renameMapChan)
+	if err != nil {
+		return err
+	}
+
+	for _, section := range sections.MediaContainer.Directory {
+		if section.Type == "show" {
+			streamCleanNames(p, renameMapChan, section, StreamCleanNamesTv)
+		} else if section.Type == "movie" {
+			streamCleanNames(p, renameMapChan, section, StreamCleanNamesMovies)
 		}
 	}
 
@@ -133,10 +160,10 @@ func CrawlToEpisode(p *plex.Plex, libraryKey string, episodeChan chan plex.Metad
 	}
 }
 
-func GetCleanNamesTv(p *plex.Plex, sectionDirectory plex.Directory) ([]RenameMap, error) {
-	renamedMap := []RenameMap{}
+func StreamCleanNamesTv(p *plex.Plex, sectionDirectory plex.Directory, renameMapChan chan RenameMap) {
 	episodeChan := make(chan plex.Metadata, 100)
 	tvPaths := getLibraryLocations(sectionDirectory)
+	defer close(renameMapChan)
 
 	go CrawlToEpisode(p, sectionDirectory.Key, episodeChan)
 	for episode := range episodeChan {
@@ -155,7 +182,17 @@ func GetCleanNamesTv(p *plex.Plex, sectionDirectory plex.Directory) ([]RenameMap
 		if cleanName == file {
 			continue
 		}
-		renamedMap = append(renamedMap, RenameMap{Src: file, Dest: cleanName})
+		renameMapChan <- RenameMap{Src: file, Dest: cleanName}
+	}
+}
+
+func GetCleanNamesTv(p *plex.Plex, sectionDirectory plex.Directory) ([]RenameMap, error) {
+	renameMapChan := make(chan RenameMap, 100)
+	renamedMap := []RenameMap{}
+
+	go StreamCleanNamesTv(p, sectionDirectory, renameMapChan)
+	for rename := range renameMapChan {
+		renamedMap = append(renamedMap, rename)
 	}
 
 	return renamedMap, nil
@@ -176,10 +213,10 @@ func CrawlMovies(p *plex.Plex, libraryKey string, movieChan chan plex.Metadata) 
 	}
 }
 
-func GetCleanNamesMovies(p *plex.Plex, sectionDirectory plex.Directory) ([]RenameMap, error) {
-	renamedMap := []RenameMap{}
+func StreamCleanNamesMovies(p *plex.Plex, sectionDirectory plex.Directory, renameMapChan chan RenameMap) {
 	movieChan := make(chan plex.Metadata, 100)
 	moviePaths := getLibraryLocations(sectionDirectory)
+	defer close(renameMapChan)
 
 	go CrawlMovies(p, sectionDirectory.Key, movieChan)
 	for movie := range movieChan {
@@ -196,7 +233,17 @@ func GetCleanNamesMovies(p *plex.Plex, sectionDirectory plex.Directory) ([]Renam
 		if cleanName == file {
 			continue // already clean
 		}
-		renamedMap = append(renamedMap, RenameMap{Src: file, Dest: cleanName})
+		renameMapChan <- RenameMap{Src: file, Dest: cleanName}
+	}
+}
+
+func GetCleanNamesMovies(p *plex.Plex, sectionDirectory plex.Directory) ([]RenameMap, error) {
+	renameMapChan := make(chan RenameMap, 100)
+	renamedMap := []RenameMap{}
+
+	go StreamCleanNamesMovies(p, sectionDirectory, renameMapChan)
+	for rename := range renameMapChan {
+		renamedMap = append(renamedMap, rename)
 	}
 
 	return renamedMap, nil

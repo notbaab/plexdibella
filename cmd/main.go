@@ -21,14 +21,15 @@ func test(c *cli.Context) {
 		log.Panicln(err)
 	}
 
-	renameMap, err := plexdibella.GetAllCleanNames(p)
+	renameMapChan := make(chan plexdibella.RenameMap, 100)
+	go plexdibella.StreamAllCleanNames(p, renameMapChan)
 	if err != nil {
 		log.Panicln(err)
 	}
 
-	fmt.Printf("%d files to rename\n", len(renameMap))
-	for _, nameMap := range renameMap {
-		if false {
+	for nameMap := range renameMapChan {
+		// for _, nameMap := range renameMap {
+		if true {
 			fmt.Printf("%s -> %s\n", nameMap.Src, nameMap.Dest)
 		}
 	}
