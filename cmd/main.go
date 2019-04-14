@@ -22,16 +22,20 @@ func test(c *cli.Context) {
 	}
 
 	renameMapChan := make(chan plexdibella.RenameMap, 100)
-	go plexdibella.StreamAllCleanNames(p, renameMapChan)
+	errChan := make(chan error, 1)
+	go plexdibella.StreamAllCleanNames(p, renameMapChan, errChan)
 	if err != nil {
 		log.Panicln(err)
 	}
 
 	for nameMap := range renameMapChan {
-		// for _, nameMap := range renameMap {
 		if true {
 			fmt.Printf("%s -> %s\n", nameMap.Src, nameMap.Dest)
 		}
+	}
+
+	for err := range errChan {
+		log.Panicln(err)
 	}
 }
 

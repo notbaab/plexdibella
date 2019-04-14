@@ -48,11 +48,13 @@ func streamCleanNames(p *plex.Plex, renameMapChan chan RenameMap, section plex.D
 	}
 }
 
-func StreamAllCleanNames(p *plex.Plex, renameMapChan chan RenameMap) error {
+func StreamAllCleanNames(p *plex.Plex, renameMapChan chan RenameMap, errChan chan error) {
 	sections, err := p.GetLibraries()
 	defer close(renameMapChan)
+	defer close(errChan)
 	if err != nil {
-		return err
+		errChan <- err
+		return
 	}
 
 	for _, section := range sections.MediaContainer.Directory {
@@ -62,8 +64,6 @@ func StreamAllCleanNames(p *plex.Plex, renameMapChan chan RenameMap) error {
 			streamCleanNames(p, renameMapChan, section, StreamCleanNamesMovies)
 		}
 	}
-
-	return nil
 }
 
 // wraps the clean tv and movies call into a single call
